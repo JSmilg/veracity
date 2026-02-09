@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300..700&family=JetBrains+Mono:wght@400..700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface-0 text-zinc-100 antialiased;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-1 border border-edge rounded-xl shadow-elevation-1;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-accent text-white rounded-lg font-semibold font-sans
+           hover:bg-accent-hover transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-transparent text-accent border border-accent/40
+           rounded-lg font-semibold font-sans hover:bg-accent/10
+           transition-all duration-200 hover:border-accent;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
