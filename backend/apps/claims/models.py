@@ -108,14 +108,14 @@ class Claim(models.Model):
 
     # Basic claim info
     claim_text = models.TextField(help_text="The actual claim made")
-    publication = models.CharField(max_length=200)
-    article_url = models.URLField()
+    publication = models.CharField(max_length=500)
+    article_url = models.URLField(max_length=1000)
     claim_date = models.DateTimeField(db_index=True)
 
     # Player/Club information
-    player_name = models.CharField(max_length=200, blank=True)
-    from_club = models.CharField(max_length=200, blank=True)
-    to_club = models.CharField(max_length=200, blank=True)
+    player_name = models.CharField(max_length=500, blank=True)
+    from_club = models.CharField(max_length=500, blank=True)
+    to_club = models.CharField(max_length=500, blank=True)
     transfer_fee = models.CharField(
         max_length=100,
         blank=True,
@@ -146,7 +146,7 @@ class Claim(models.Model):
         blank=True,
         help_text="Admin notes on validation"
     )
-    validation_source_url = models.URLField(
+    validation_source_url = models.URLField(max_length=1000,
         blank=True,
         help_text="URL proving true/false"
     )
