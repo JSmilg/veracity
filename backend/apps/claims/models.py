@@ -151,6 +151,14 @@ class Claim(models.Model):
         help_text="URL proving true/false"
     )
 
+    # Negative claims: indicates the claim says a deal WON'T happen
+    # (e.g. contract extension, rejected move, player staying)
+    is_transfer_negative = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Claim indicates deal will NOT happen (extension, rejection, staying)"
+    )
+
     # For speed scoring: track if this was the first claim about this transfer
     is_first_claim = models.BooleanField(
         default=False,
@@ -273,3 +281,94 @@ class ScrapedArticle(models.Model):
 
     def __str__(self):
         return f"{self.source_name} - {self.url[:80]} ({self.scraped_at.strftime('%Y-%m-%d')})"
+
+
+# ---------------------------------------------------------------------------
+# Reference data — canonical players and clubs from Transfermarkt
+# ---------------------------------------------------------------------------
+
+class ReferenceClub(models.Model):
+    """Canonical club record imported from Transfermarkt."""
+
+    transfermarkt_id = models.IntegerField(unique=True, db_index=True)
+    name = models.CharField(max_length=300, db_index=True)
+    slug = models.SlugField(max_length=300, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    competition = models.CharField(max_length=200, blank=True)
+    logo_url = models.URLField(max_length=500, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['country']),
+        ]
+        verbose_name = 'Reference Club'
+        verbose_name_plural = 'Reference Clubs'
+
+    def __str__(self):
+        return f"{self.name} ({self.country})"
+
+
+class ReferencePlayer(models.Model):
+    """Canonical player record imported from Transfermarkt."""
+
+    transfermarkt_id = models.IntegerField(unique=True, db_index=True)
+    name = models.CharField(max_length=300, db_index=True)
+    slug = models.SlugField(max_length=300, blank=True)
+
+    # Current club linkage
+    current_club = models.ForeignKey(
+        ReferenceClub,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='players',
+    )
+    current_club_name = models.CharField(
+        max_length=300, blank=True,
+        help_text="Denormalised club name for quick lookups",
+    )
+
+    # Loan tracking
+    on_loan_from_club = models.ForeignKey(
+        ReferenceClub,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='loaned_out_players',
+    )
+    on_loan_from_club_name = models.CharField(max_length=300, blank=True)
+
+    # Player details
+    position = models.CharField(max_length=100, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    citizenship = models.CharField(max_length=200, blank=True)
+    contract_expires = models.DateField(null=True, blank=True)
+
+    # Source metadata
+    image_url = models.URLField(max_length=500, blank=True)
+    is_manager = models.BooleanField(
+        default=False,
+        help_text="True if this person is known to be a manager, not a player",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['current_club_name']),
+            models.Index(fields=['position']),
+        ]
+        verbose_name = 'Reference Player'
+        verbose_name_plural = 'Reference Players'
+
+    def __str__(self):
+        club = self.current_club_name or 'No Club'
+        return f"{self.name} ({club})"

@@ -18,6 +18,7 @@ const Header = () => {
               { to: '/leaderboard', label: 'Leaderboard' },
               { to: '/transfer/2', label: 'Transfer Timeline', match: '/transfer/' },
               { to: '/matrix', label: 'Matrix' },
+              { to: '/club/arsenal', label: 'Club Tiers', match: '/club/' },
               { to: '/about', label: 'About' },
             ].map(({ to, label, match }) => {
               const active = match ? location.pathname.startsWith(match) : isActive(to)

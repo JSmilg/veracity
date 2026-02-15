@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from apps.claims.models import Journalist, Claim, ScoreHistory, Transfer, ScrapedArticle
+from apps.claims.models import (
+    Journalist, Claim, ScoreHistory, Transfer, ScrapedArticle,
+    ReferenceClub, ReferencePlayer,
+)
 
 
 @admin.register(Journalist)
@@ -293,3 +296,23 @@ class ScrapedArticleAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(ReferenceClub)
+class ReferenceClubAdmin(admin.ModelAdmin):
+    list_display = ('name', 'country', 'competition', 'transfermarkt_id')
+    list_filter = ('country', 'competition')
+    search_fields = ('name', 'country')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(ReferencePlayer)
+class ReferencePlayerAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'current_club_name', 'position', 'citizenship',
+        'is_manager', 'transfermarkt_id',
+    )
+    list_filter = ('position', 'is_manager', 'citizenship')
+    search_fields = ('name', 'current_club_name')
+    readonly_fields = ('created_at', 'updated_at')
+    autocomplete_fields = ['current_club', 'on_loan_from_club']

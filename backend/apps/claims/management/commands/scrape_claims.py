@@ -11,7 +11,11 @@ from apps.claims.scrapers.gossip_scraper import (
     find_gossip_url_from_rss,
     find_gossip_urls_from_index,
     scrape_gossip_column,
+    _extract_fee,
+    _resolve_players_with_reference,
 )
+from apps.claims.classifiers import classify_club_direction, classify_claim_confidence, detect_negative_claim
+from apps.claims.models import ReferencePlayer
 from apps.claims.scrapers.reddit_scraper import (
     create_claims_from_reddit,
     scrape_reddit_soccer,
@@ -105,18 +109,51 @@ class Command(BaseCommand):
 
             if dry_run:
                 rumours = scrape_gossip_column(url)
+                has_ref = ReferencePlayer.objects.exists()
                 self.stdout.write(self.style.WARNING(
                     f'\n  [DRY RUN] Found {len(rumours)} rumours:'
                 ))
                 for i, r in enumerate(rumours, 1):
+                    ct = r['claim_text']
                     source_url = r.get('source_url', '')
                     author = extract_author(source_url) if source_url else None
                     journalist_name = author or r['source_publication']
-                    self.stdout.write(f'\n  {i}. {r["claim_text"][:100]}...')
+                    clubs = r['clubs_mentioned']
+                    players = r['player_names']
+                    fee = _extract_fee(ct)
+                    is_neg = detect_negative_claim(ct)
+                    certainty = classify_claim_confidence(ct)
+
+                    # Resolve players against reference data
+                    ref_club = ''
+                    if has_ref and players:
+                        resolved = _resolve_players_with_reference(players)
+                        players = [p['name'] for p in resolved]
+                        ref_club = next(
+                            (p['current_club'] for p in resolved if p['current_club']), ''
+                        )
+
+                    from_club, to_club = classify_club_direction(ct, clubs) if clubs else ('', '')
+                    if not from_club and ref_club:
+                        to_lower = to_club.lower() if to_club else ''
+                        if ref_club.lower() not in to_lower:
+                            from_club = ref_club
+                    if is_neg:
+                        to_club = ''
+
+                    self.stdout.write(f'\n  {i}. {ct[:100]}...')
                     self.stdout.write(f'     Source: {r["source_publication"]}')
                     self.stdout.write(f'     Journalist: {journalist_name}')
-                    self.stdout.write(f'     Players: {", ".join(r["player_names"]) or "N/A"}')
-                    self.stdout.write(f'     Clubs: {", ".join(r["clubs_mentioned"]) or "N/A"}')
+                    self.stdout.write(f'     Players: {", ".join(players) or "N/A"}')
+                    self.stdout.write(f'     Clubs: {", ".join(clubs) or "N/A"}')
+                    self.stdout.write(f'     From: {from_club or "N/A"} → To: {to_club or "N/A"}')
+                    if fee:
+                        self.stdout.write(f'     Fee: {fee}')
+                    if ref_club:
+                        self.stdout.write(f'     Ref Club: {ref_club}')
+                    self.stdout.write(f'     Confidence: {certainty}')
+                    if is_neg:
+                        self.stdout.write(self.style.WARNING(f'     ⚠ NEGATIVE CLAIM (not a transfer)'))
             else:
                 count = create_claims_from_gossip(url, dry_run=False)
                 self.stdout.write(self.style.SUCCESS(f'  Created {count} claims from gossip column'))

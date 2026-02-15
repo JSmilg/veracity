@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q
 
-from apps.claims.models import Journalist, Claim, ScoreHistory, Transfer
+from apps.claims.models import Journalist, Claim, ScoreHistory, Transfer, ReferenceClub, ReferencePlayer
 from apps.claims.services.validator import players_match, clubs_match
 from apps.claims.serializers import (
     JournalistListSerializer,
@@ -17,6 +17,8 @@ from apps.claims.serializers import (
     ClaimWriteSerializer,
     ScoreHistorySerializer,
     TransferSerializer,
+    ReferenceClubSerializer,
+    ReferencePlayerSerializer,
 )
 
 
@@ -151,6 +153,75 @@ class JournalistViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(results)
 
 
+    @action(detail=False, methods=['get'], url_path='club-tiers')
+    def club_tiers(self, request):
+        """
+        Get journalist tier list for a specific club.
+
+        Query params:
+        - club: Club name (e.g. 'Arsenal', 'Chelsea')
+
+        Tiers: T1 ≥70%, T2 ≥50%, T3 ≥30%, T4 <30% (all require ≥3 validated claims)
+        """
+        from apps.claims.services.scoring import ScoringService
+
+        club = request.query_params.get('club', '')
+        if not club:
+            return Response(
+                {'error': 'club parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        stats = ScoringService.compute_club_journalist_stats(club)
+
+        # Build journalist entries with tier assignments
+        journalist_ids = list(stats.keys())
+        journalists = {
+            j.id: j
+            for j in Journalist.objects.filter(id__in=journalist_ids)
+        }
+
+        results = []
+        for jid, s in stats.items():
+            journalist = journalists.get(jid)
+            if not journalist:
+                continue
+
+            # Assign tier based on accuracy with minimum 3 total claims
+            if s['total_claims'] >= 3:
+                accuracy = s['accuracy']
+                if accuracy >= 70:
+                    tier = 1
+                elif accuracy >= 50:
+                    tier = 2
+                elif accuracy >= 30:
+                    tier = 3
+                else:
+                    tier = 4
+            else:
+                tier = None  # untiered / low volume
+
+            results.append({
+                'journalist': JournalistListSerializer(journalist).data,
+                'club_accuracy': s['accuracy'],
+                'club_speed': s['speed'],
+                'club_claims': s['total_claims'],
+                'club_validated': s['validated'],
+                'club_true': s['true_count'],
+                'club_false': s['false_count'],
+                'tier': tier,
+            })
+
+        # Sort: tiered first (by tier asc, accuracy desc), then untiered
+        results.sort(key=lambda r: (
+            0 if r['tier'] is not None else 1,
+            r['tier'] if r['tier'] is not None else 99,
+            -r['club_accuracy'],
+        ))
+
+        return Response(results)
+
+
 class ClaimViewSet(viewsets.ModelViewSet):
     """
     API endpoint for claims.
@@ -247,7 +318,16 @@ class ClaimViewSet(viewsets.ModelViewSet):
         """
         clubs_to = Claim.objects.values_list('to_club', flat=True).distinct()
         clubs_from = Claim.objects.values_list('from_club', flat=True).distinct()
-        clubs = sorted(set(c for c in (list(clubs_to) + list(clubs_from)) if c))
+        # Split comma-separated club strings into individual clubs
+        club_set = set()
+        for raw in list(clubs_to) + list(clubs_from):
+            if not raw:
+                continue
+            for club in raw.split(','):
+                club = club.strip()
+                if club:
+                    club_set.add(club)
+        clubs = sorted(club_set)
 
         # Normalize publications: strip whitespace, remove common suffixes,
         # and deduplicate case-insensitively
@@ -537,3 +617,45 @@ class TransferViewSet(viewsets.ReadOnlyModelViewSet):
             },
             'total_claims': len(matching),
         })
+
+
+class ReferenceClubViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for reference clubs (read-only).
+
+    Supports search by name and filtering by country/competition.
+    """
+
+    queryset = ReferenceClub.objects.all()
+    serializer_class = ReferenceClubSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['country', 'competition']
+    search_fields = ['name']
+    ordering_fields = ['name', 'country']
+    ordering = ['name']
+
+
+class ReferencePlayerViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for reference players (read-only).
+
+    Supports search by name and filtering by position/club/citizenship.
+    """
+
+    queryset = ReferencePlayer.objects.all()
+    serializer_class = ReferencePlayerSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = {
+        'position': ['exact'],
+        'citizenship': ['exact'],
+        'is_manager': ['exact'],
+        'current_club': ['exact'],
+    }
+    search_fields = ['name', 'current_club_name']
+    ordering_fields = ['name', 'current_club_name', 'position']
+    ordering = ['name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        queryset = queryset.select_related('current_club', 'on_loan_from_club')
+        return queryset

@@ -5,6 +5,7 @@ import {
   getJournalistScoreHistory,
   getJournalistClaims,
   getLeaderboard,
+  getClubTiers,
 } from '../api/journalists'
 
 /**
@@ -73,5 +74,19 @@ export const useLeaderboard = (params = {}) => {
     queryKey: ['leaderboard', params],
     queryFn: () => getLeaderboard(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+}
+
+/**
+ * Hook to fetch club-specific journalist tiers
+ * @param {string} club - Club name
+ * @returns {Object} React Query result
+ */
+export const useClubTiers = (club) => {
+  return useQuery({
+    queryKey: ['clubTiers', club],
+    queryFn: () => getClubTiers(club),
+    enabled: !!club,
+    staleTime: 1000 * 60 * 10, // 10 minutes
   })
 }

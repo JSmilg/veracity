@@ -1,6 +1,8 @@
 from collections import defaultdict
 from decimal import Decimal
 
+from django.db.models import Q
+
 from apps.claims.services.validator import players_match, clubs_match
 
 
@@ -285,6 +287,122 @@ class ScoringService:
             updated += 1
 
         return updated
+
+    @staticmethod
+    def compute_club_journalist_stats(club_name):
+        """
+        Compute per-journalist accuracy and speed stats filtered to a specific club.
+
+        Returns dict: journalist_id -> {
+            accuracy, speed, total_claims, validated, true_count, false_count
+        }
+        """
+        from apps.claims.models import Claim, Journalist
+
+        # Get all claims involving this club
+        club_claims = (
+            Claim.objects
+            .filter(Q(to_club__icontains=club_name) | Q(from_club__icontains=club_name))
+            .select_related('journalist')
+        )
+
+        # Group by journalist
+        journalist_claims = defaultdict(list)
+        for claim in club_claims:
+            journalist_claims[claim.journalist_id].append(claim)
+
+        # Compute story earliness filtered to this club's confirmed stories
+        confirmed = (
+            Claim.objects
+            .filter(validation_status='confirmed_true')
+            .filter(Q(to_club__icontains=club_name) | Q(from_club__icontains=club_name))
+            .exclude(player_name='')
+            .values_list('player_name', 'to_club')
+            .distinct()
+        )
+
+        stories = []
+        for player, club in confirmed:
+            if not player:
+                continue
+            found = False
+            for sp, sc in stories:
+                if players_match(player, sp) and (clubs_match(club, sc) if club and sc else True):
+                    found = True
+                    break
+            if not found:
+                stories.append((player, club or ''))
+
+        # For earliness, consider ALL claims about these stories (not just club-filtered)
+        all_claims = (
+            Claim.objects
+            .exclude(player_name='')
+            .select_related('journalist')
+            .order_by('claim_date')
+        )
+
+        claims_by_lastname = defaultdict(list)
+        for c in all_claims:
+            last = c.player_name.strip().split()[-1].lower()
+            claims_by_lastname[last].append(c)
+
+        journalist_earliness = defaultdict(list)
+
+        for story_player, story_club in stories:
+            last = story_player.strip().split()[-1].lower()
+            candidates = claims_by_lastname.get(last, [])
+
+            story_claims = []
+            for c in candidates:
+                if players_match(c.player_name, story_player):
+                    if story_club and c.to_club:
+                        if clubs_match(c.to_club, story_club):
+                            story_claims.append(c)
+                    elif not story_club:
+                        story_claims.append(c)
+
+            if not story_claims:
+                continue
+
+            story_claims.sort(key=lambda c: c.claim_date)
+            journalist_order = []
+            seen_journalists = set()
+            for c in story_claims:
+                if c.journalist_id not in seen_journalists:
+                    seen_journalists.add(c.journalist_id)
+                    journalist_order.append(c.journalist_id)
+
+            n = len(journalist_order)
+            if n < 2:
+                continue
+
+            for rank_idx, jid in enumerate(journalist_order):
+                earliness = (n - 1 - rank_idx) / (n - 1)
+                journalist_earliness[jid].append(earliness)
+
+        # Build results
+        results = {}
+        for jid, claims in journalist_claims.items():
+            total = len(claims)
+            validated = sum(1 for c in claims if c.validation_status != 'pending')
+            true_count = sum(1 for c in claims if c.validation_status == 'confirmed_true')
+            false_count = sum(1 for c in claims if c.validation_status == 'proven_false')
+
+            accuracy = round((true_count / total) * 100, 2) if total > 0 else 0
+
+            earliness_scores = journalist_earliness.get(jid, [])
+            speed = round((sum(earliness_scores) / len(earliness_scores)) * 100, 2) if earliness_scores else 0
+
+            results[jid] = {
+                'accuracy': accuracy,
+                'speed': speed,
+                'total_claims': total,
+                'validated': validated,
+                'true_count': true_count,
+                'false_count': false_count,
+            }
+
+        return results
 
     @staticmethod
     def get_journalist_stats(journalist):

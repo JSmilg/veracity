@@ -8,6 +8,7 @@ import AboutPage from './pages/AboutPage'
 import TransferTimelinePage from './pages/TransferTimelinePage'
 import ReliabilityMatrixPage from './pages/ReliabilityMatrixPage'
 import ComingSoonPage from './pages/ComingSoonPage'
+import ClubTierListPage from './pages/ClubTierListPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/journalist/:slug" element={<JournalistDetailPage />} />
           <Route path="/transfer/:id" element={<TransferTimelinePage />} />
           <Route path="/matrix" element={<ReliabilityMatrixPage />} />
+          <Route path="/club/:slug" element={<ClubTierListPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/coming-soon/:domain" element={<ComingSoonPage />} />
         </Routes>

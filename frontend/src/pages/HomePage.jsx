@@ -109,7 +109,7 @@ const HomePage = () => {
 
           <p className="text-xl md:text-2xl text-zinc-400 max-w-3xl mx-auto mb-10 leading-relaxed font-sans">
             Data-driven journalism accountability. Track which football reporters
-            get it right, and which ones are just chasing clicks.
+            get it right, and which ones are just jumping on the bandwagon.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

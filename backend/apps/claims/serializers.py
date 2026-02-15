@@ -1,7 +1,7 @@
 from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import serializers
-from apps.claims.models import Journalist, Claim, ScoreHistory, Transfer
+from apps.claims.models import Journalist, Claim, ScoreHistory, Transfer, ReferenceClub, ReferencePlayer
 from apps.claims.services.scoring import ScoringService
 from apps.claims.classifiers import classify_claim_confidence, classify_club_direction
 from apps.claims.scrapers.gossip_scraper import _extract_clubs
@@ -177,6 +177,7 @@ class ClaimSerializer(serializers.ModelSerializer):
             'validation_date',
             'validation_notes',
             'validation_source_url',
+            'is_transfer_negative',
             'is_first_claim',
             'created_at',
             'updated_at',
@@ -224,6 +225,7 @@ class ClaimWriteSerializer(serializers.ModelSerializer):
             'to_club',
             'transfer_fee',
             'certainty_level',
+            'is_transfer_negative',
             'source_type',
             'validation_status',
         ]
@@ -236,6 +238,7 @@ class ClaimWriteSerializer(serializers.ModelSerializer):
             'to_club': {'required': False},
             'transfer_fee': {'required': False},
             'certainty_level': {'required': False},
+            'is_transfer_negative': {'required': False},
             'source_type': {'required': False},
             'validation_status': {'required': False},
         }
@@ -336,3 +339,49 @@ class LeaderboardSerializer(serializers.Serializer):
     journalist = JournalistListSerializer()
     score = serializers.DecimalField(max_digits=5, decimal_places=2)
     score_type = serializers.CharField()  # 'truthfulness' or 'speed'
+
+
+class ReferenceClubSerializer(serializers.ModelSerializer):
+    """Serializer for reference club data"""
+
+    player_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReferenceClub
+        fields = [
+            'id',
+            'transfermarkt_id',
+            'name',
+            'slug',
+            'country',
+            'competition',
+            'logo_url',
+            'player_count',
+        ]
+
+    def get_player_count(self, obj):
+        return obj.players.count()
+
+
+class ReferencePlayerSerializer(serializers.ModelSerializer):
+    """Serializer for reference player data"""
+
+    club_name = serializers.CharField(source='current_club_name', read_only=True)
+
+    class Meta:
+        model = ReferencePlayer
+        fields = [
+            'id',
+            'transfermarkt_id',
+            'name',
+            'slug',
+            'current_club_name',
+            'club_name',
+            'on_loan_from_club_name',
+            'position',
+            'date_of_birth',
+            'citizenship',
+            'contract_expires',
+            'image_url',
+            'is_manager',
+        ]

@@ -5,6 +5,8 @@ from apps.claims.views import (
     ClaimViewSet,
     ScoreHistoryViewSet,
     TransferViewSet,
+    ReferenceClubViewSet,
+    ReferencePlayerViewSet,
 )
 
 # Create router and register viewsets
@@ -13,6 +15,8 @@ router.register(r'journalists', JournalistViewSet, basename='journalist')
 router.register(r'claims', ClaimViewSet, basename='claim')
 router.register(r'score-history', ScoreHistoryViewSet, basename='scorehistory')
 router.register(r'transfers', TransferViewSet, basename='transfer')
+router.register(r'reference-clubs', ReferenceClubViewSet, basename='referenceclub')
+router.register(r'reference-players', ReferencePlayerViewSet, basename='referenceplayer')
 
 urlpatterns = [
     path('', include(router.urls)),

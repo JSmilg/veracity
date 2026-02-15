@@ -50,3 +50,13 @@ export const getLeaderboard = async (params = {}) => {
   const { data } = await apiClient.get('/journalists/leaderboard/', { params })
   return data
 }
+
+/**
+ * Get club-specific journalist tier list
+ * @param {string} club - Club name (e.g. 'Arsenal')
+ * @returns {Promise} Tiered list of journalists for the club
+ */
+export const getClubTiers = async (club) => {
+  const { data } = await apiClient.get('/journalists/club-tiers/', { params: { club } })
+  return data
+}
